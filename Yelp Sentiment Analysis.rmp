@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?><process version="10.2.000">
+  <context>
+    <input/>
+    <output/>
+    <macros/>
+  </context>
+  <operator activated="true" class="process" compatibility="10.2.000" expanded="true" name="Process">
+    <parameter key="logverbosity" value="init"/>
+    <parameter key="random_seed" value="2001"/>
+    <parameter key="send_mail" value="never"/>
+    <parameter key="notification_email" value=""/>
+    <parameter key="process_duration_for_mail" value="30"/>
+    <parameter key="encoding" value="SYSTEM"/>
+    <process expanded="true">
+      <operator activated="true" class="nosql:mongodb_document_reader" compatibility="10.0.000" expanded="true" height="124" name="Read MongoDB" width="90" x="45" y="238">
+        <parameter key="connection_source" value="repository"/>
+        <parameter key="connection_entry" value="//Local Repository/Connections/MongoDB"/>
+        <parameter key="collection" value="Collection3"/>
+        <parameter key="sort_documents" value="false"/>
+        <parameter key="limit_results" value="false"/>
+        <parameter key="skip" value="0"/>
+      </operator>
+      <operator activated="true" class="text:json_to_data" compatibility="10.0.000" expanded="true" height="82" name="JSON To Data" width="90" x="179" y="238">
+        <parameter key="ignore_arrays" value="false"/>
+        <parameter key="limit_attributes" value="false"/>
+        <parameter key="skip_invalid_documents" value="false"/>
+        <parameter key="guess_data_types" value="true"/>
+        <parameter key="keep_missing_attributes" value="false"/>
+        <parameter key="missing_values_aliases" value=", null, NaN, missing"/>
+      </operator>
+      <operator activated="true" class="python_scripting:execute_python" compatibility="10.0.001" expanded="true" height="103" name="Data Cleaning" width="90" x="313" y="238">
+        <parameter key="script" value="import pandas as pd&#10;import re&#10;&#10;def clean_reviews(data):&#10;    # Define a function to clean a single review&#10;    def clean_review(review):&#10;        # Remove non-alphanumeric characters&#10;        review = re.sub(r'\W+', ' ', review)&#10;        return review&#10;&#10;    # Apply the function to the review column&#10;    data['Review'] = data['Review'].apply(clean_review)&#10;&#10;    return data&#10;&#10;def rm_main(data):&#10;    # Clean the reviews&#10;    data = clean_reviews(data)&#10;    &#10;    return data&#10;"/>
+        <parameter key="notebook_cell_tag_filter" value=""/>
+        <parameter key="use_default_python" value="true"/>
+        <parameter key="package_manager" value="conda (anaconda)"/>
+        <parameter key="use_macros" value="false"/>
+      </operator>
+      <operator activated="true" class="operator_toolbox:extract_sentiment" compatibility="2.16.000" expanded="true" height="103" name="Extract Sentiment" width="90" x="447" y="238">
+        <parameter key="model" value="vader"/>
+        <parameter key="text_attribute" value="Review"/>
+        <parameter key="show_advanced_output" value="false"/>
+        <parameter key="use_default_tokenization_regex" value="true"/>
+        <list key="additional_words"/>
+      </operator>
+      <operator activated="true" class="blending:generate_columns" compatibility="10.2.000" expanded="true" height="82" name="Generate Attributes" width="90" x="581" y="238">
+        <list key="function_descriptions">
+          <parameter key="Sentiment" value="if(Score &gt; 0, &quot;Positive&quot;, if(Score &lt; 0, &quot;Negative&quot;, if(Score == 0, &quot;Neutral&quot;, &quot;&quot;)))"/>
+        </list>
+        <parameter key="keep_all_columns" value="true"/>
+      </operator>
+      <operator activated="true" class="write_excel" compatibility="10.2.000" expanded="true" height="103" name="Write Excel" width="90" x="782" y="391">
+        <parameter key="excel_file" value="C:/Users/jijoj/OneDrive/Desktop/Big Data Analytics - Semester 2/Social Data Mining/Final Project/Sentiment Analysis.xlsx"/>
+        <parameter key="file_format" value="xlsx"/>
+        <enumeration key="sheet_names">
+          <parameter key="sheet_name_element" value="Sentiment Analysis"/>
+          <parameter key="sheet_name_element" value=""/>
+        </enumeration>
+        <parameter key="sheet_name" value="RapidMiner Data"/>
+        <parameter key="date_format" value="yyyy-MM-dd HH:mm:ss"/>
+        <parameter key="number_format" value="#.0"/>
+        <parameter key="encoding" value="SYSTEM"/>
+      </operator>
+      <operator activated="true" class="python_scripting:execute_python" compatibility="10.0.001" expanded="true" height="103" name="Store the Sentiment to DB" width="90" x="782" y="34">
+        <parameter key="script" value="from pymongo import MongoClient&#10;&#10;def rm_main(data):&#10;    # MongoDB database configuration&#10;    username = 'dbuser'&#10;    password = 'Pa$$word@61803'&#10;    escaped_username = urllib.parse.quote_plus(username)&#10;    escaped_password = urllib.parse.quote_plus(password)&#10;    database_url = 'dbcluster1.2v8vfcl.mongodb.net'&#10;    db_name = 'Database1'&#10;&#10;# Creating MongoDB connection&#10;    uri = f&quot;mongodb+srv://{escaped_username}:{escaped_password}@{database_url}/{db_name}&quot;&#10;&#10;# Connect to MongoDB using the URI&#10;    client = pymongo.MongoClient(uri)&#10;    db = client[db_name]&#10;    collection = db['Collection3']&#10;&#10;    # Insert the data into the collection&#10;    collection.insert_many(data.to_dict('records'))&#10;&#10;    return data"/>
+        <parameter key="script_file" value="C:/Users/jijoj/OneDrive/Desktop/Big Data Analytics - Semester 2/Social Data Mining/script.py"/>
+        <parameter key="notebook_cell_tag_filter" value=""/>
+        <parameter key="use_default_python" value="true"/>
+        <parameter key="package_manager" value="conda (anaconda)"/>
+        <parameter key="use_macros" value="false"/>
+      </operator>
+      <connect from_op="Read MongoDB" from_port="collection" to_op="JSON To Data" to_port="documents 1"/>
+      <connect from_op="JSON To Data" from_port="example set" to_op="Data Cleaning" to_port="input 1"/>
+      <connect from_op="Data Cleaning" from_port="output 1" to_op="Extract Sentiment" to_port="exa"/>
+      <connect from_op="Extract Sentiment" from_port="exa" to_op="Generate Attributes" to_port="table input"/>
+      <connect from_op="Generate Attributes" from_port="table output" to_op="Store the Sentiment to DB" to_port="input 1"/>
+      <connect from_op="Generate Attributes" from_port="original" to_op="Write Excel" to_port="input"/>
+      <connect from_op="Store the Sentiment to DB" from_port="output 1" to_port="result 1"/>
+      <portSpacing port="source_input 1" spacing="0"/>
+      <portSpacing port="sink_result 1" spacing="0"/>
+      <portSpacing port="sink_result 2" spacing="0"/>
+    </process>
+  </operator>
+</process>
